@@ -262,3 +262,53 @@ export function createSqliteSessionStore(options: SqliteSessionStoreOptions = {}
     },
   };
 }
+
+/**
+ * 세션 파일을 **읽기 전용**으로 열어 스냅샷을 준다. 세션 파일이 아니면 `null`.
+ *
+ * `Store` 가 아니라 **판별기**다. 호출자(대시보드)는 프로젝트를 훑으며 파일마다 "이게
+ * 세션인가" 를 묻는다. 그 자리에서는 아닌 파일이 정상 입력이므로 **던지지 않고 `null` 을
+ * 준다** — 훑는 쪽이 파일마다 try/catch 를 두르지 않아도 되게 하는 것이 이 계약의 목적이다.
+ *
+ * `readOnly: true` 가 핵심이다. 기본 모드로 열면 없는 경로에 **빈 DB 를 만들고 스키마까지
+ * 심는다.** 그러면 프로젝트를 훑는 것만으로 사용자 저장소에 쓰레기 파일이 깔린다. 읽기
+ * 전용으로 열면 없는 파일에서 그 자리에 실패하고 아무것도 만들지 않는다.
+ *
+ * 열리기는 했지만 내용이 세션이 아닌 경우(테이블 없음·다른 스키마·본문 손상)도 `null` 이다.
+ * 판별기의 답은 "읽을 수 있는 세션인가" 하나뿐이고, 그 이유는 호출자가 쓸 데가 없다.
+ */
+export function loadSession(path: string): SessionSnapshot | null {
+  let db: DatabaseSync;
+  try {
+    db = new DatabaseSync(path, { readOnly: true });
+  } catch {
+    // 없는 경로이거나 열 수 없는 파일이다.
+    return null;
+  }
+  try {
+    // 세션 파일 하나에 세션 하나다(CLI 의 `SESSION_ID`). 그래도 `ORDER BY` 를 붙이는 것은
+    // 여러 건이 들어 있는 파일에서 **어느 것을 고를지가 실행마다 달라지지 않게** 하려는 것이다.
+    const session = db
+      .prepare("SELECT session_id, status FROM sessions ORDER BY session_id LIMIT 1")
+      .get() as { session_id: string; status: SessionStatus } | undefined;
+    if (session === undefined) return null;
+    const rows = db
+      .prepare(
+        `SELECT interaction_id, ordinal, occurrence, recorded_at, status, request_json, outcome_json
+           FROM interactions
+          WHERE session_id = ?
+          ORDER BY ordinal`,
+      )
+      .all(session.session_id) as unknown as InteractionRow[];
+    return Object.freeze<SessionSnapshot>({
+      sessionId: session.session_id,
+      status: session.status,
+      interactions: Object.freeze(rows.map(toInteraction)),
+    });
+  } catch {
+    // SQLite 는 맞지만 우리 스키마가 아니거나 본문이 깨졌다.
+    return null;
+  } finally {
+    if (db.isOpen) db.close();
+  }
+}

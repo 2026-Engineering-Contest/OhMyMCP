@@ -49,6 +49,8 @@ describe("@mcpeak/record/external subpath", () => {
     expect(surface).toEqual([
       "ExternalRecordReplayError",
       "createSqliteSessionStore",
+      // 대시보드가 프로젝트를 훑으며 "이게 세션인가" 를 묻는 판별기다(`loadCassette` 자리).
+      "loadSession",
       "startExternalCoordinator",
     ]);
   });

@@ -23,6 +23,7 @@ const require = createRequire(import.meta.url);
 const EXPECTED = [
   "ExternalRecordReplayError",
   "createSqliteSessionStore",
+  "loadSession",
   "startExternalCoordinator",
 ];
 
