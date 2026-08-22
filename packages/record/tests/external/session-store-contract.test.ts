@@ -23,14 +23,8 @@ const STORES: readonly { readonly name: string; readonly create: () => SessionSt
 
 const request = (matchKey = "match-a"): NormalizedExternalRequest => ({
   protocol: "http",
-  schemaVersion: 1,
+  interactionSchemaVersion: 1,
   matchKey,
-  match: {
-    method: "GET",
-    url: `https://example.com/${matchKey}`,
-    headers: {},
-    body: { kind: "none" },
-  },
   display: {
     method: "GET",
     url: `https://example.com/${matchKey}`,
@@ -329,7 +323,7 @@ describe.each(STORES)("SessionStore 계약 — $name", ({ create }) => {
       // SQLite 는 넣을 때 직렬화해 호출자를 안 건드리므로, 여기가 갈리면 저장 매체에 따라
       // 동작이 달라진다 — 계약이 없애려는 것이 그 차이다.
       expect(() => {
-        (sent.match as { method: string }).method = "POST";
+        (sent.display as { method: string }).method = "POST";
         (sentOutcome as { status: number }).status = 500;
       }).not.toThrow();
     });
@@ -340,9 +334,9 @@ describe.each(STORES)("SessionStore 계약 — $name", ({ create }) => {
       const sent = request("a");
       store.reserve({ sessionId: "s1", request: sent });
 
-      (sent.match as { method: string }).method = "POST";
+      (sent.display as { method: string }).method = "POST";
 
-      expect(store.read("s1")?.interactions[0]?.request.match.method).toBe("GET");
+      expect(store.read("s1")?.interactions[0]?.request.display.method).toBe("GET");
     });
   });
 
@@ -356,12 +350,12 @@ describe.each(STORES)("SessionStore 계약 — $name", ({ create }) => {
       if (snapshot?.outcome === undefined) throw new Error("스냅샷을 읽지 못했습니다.");
 
       // 최상위만 얼려 두면 이 두 줄로 저장본이 바뀐다. 그러면 이미 계산된 matchKey 와
-      // 저장된 match 가 어긋나고, Replay 가 기록과 다른 것을 돌려준다.
+      // 저장된 display 가 어긋나고, 진단이 기록과 다른 것을 보여준다.
       //
       // 얼려 있으면 strict mode 에서 던진다. 던지든 무시되든 **저장본만 그대로면** 된다 —
       // 계약이 요구하는 것은 freeze 라는 수단이 아니라 오염되지 않는다는 성질이다.
       try {
-        (snapshot.request.match as { method: string }).method = "DELETE";
+        (snapshot.request.display as { method: string }).method = "DELETE";
       } catch {
         // 성질만 보므로 던지는 것 자체는 판정 대상이 아니다.
       }
@@ -373,7 +367,7 @@ describe.each(STORES)("SessionStore 계약 — $name", ({ create }) => {
 
       const stored = store.read("s1")?.interactions[0];
       if (stored?.outcome === undefined) throw new Error("저장본을 읽지 못했습니다.");
-      expect(stored.request.match.method).toBe("GET");
+      expect(stored.request.display.method).toBe("GET");
       expect((stored.outcome as { status: number }).status).toBe(200);
     });
   });

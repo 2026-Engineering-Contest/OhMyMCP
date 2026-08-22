@@ -8,14 +8,8 @@ import { createMemorySessionStore } from "../../src/external/session-store.js";
 
 const request = (matchKey = "match-a"): NormalizedExternalRequest => ({
   protocol: "http",
-  schemaVersion: 1,
+  interactionSchemaVersion: 1,
   matchKey,
-  match: {
-    method: "GET",
-    url: `https://example.com/${matchKey}`,
-    headers: {},
-    body: { kind: "none" },
-  },
   display: {
     method: "GET",
     url: `https://example.com/${matchKey}`,

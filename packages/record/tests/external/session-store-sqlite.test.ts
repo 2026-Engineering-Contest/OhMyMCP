@@ -50,14 +50,8 @@ const newDbPath = (): string => {
 
 const request = (matchKey: string): NormalizedExternalRequest => ({
   protocol: "http",
-  schemaVersion: 1,
+  interactionSchemaVersion: 1,
   matchKey,
-  match: {
-    method: "GET",
-    url: `https://example.com/${matchKey}`,
-    headers: {},
-    body: { kind: "none" },
-  },
   display: {
     method: "GET",
     url: `https://example.com/${matchKey}`,

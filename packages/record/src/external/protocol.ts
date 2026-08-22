@@ -1,6 +1,15 @@
+/**
+ * HTTP interaction schema version 의 단일 정의처는 `runtime.mjs` 다. matchKey 해싱과 민감
+ * 키 목록 버전에 실제로 쓰는 그 상수를 여기서 재수출한다 — 예전에는 이 파일이
+ * `HTTP_ADAPTER_SCHEMA_VERSION` 이라는 이름으로 같은 값 `1` 을 따로 선언해 두고 있었다.
+ * 두 상수가 우연히 같은 값이라 지금까지는 드러나지 않았지만, 한쪽만 올리면 타입은 초록인
+ * 채로 버전 축이 갈라진다 — `shared/limits.mjs` 가 크기 상한에서 경고하는 것과 같은 함정이다.
+ */
+import type { HTTP_INTERACTION_SCHEMA_VERSION } from "./runtime.mjs";
+
 export const PROTOCOL_SCHEMA_VERSION = 1 as const;
-export const HTTP_ADAPTER_SCHEMA_VERSION = 1 as const;
 export { MAX_COORDINATOR_PAYLOAD_BYTES, MAX_HTTP_BODY_BYTES } from "../shared/limits.mjs";
+export { HTTP_INTERACTION_SCHEMA_VERSION } from "./runtime.mjs";
 export const DEFAULT_COORDINATOR_TIMEOUT_MS = 5_000;
 
 export type JsonPrimitive = string | number | boolean | null;
@@ -13,8 +22,16 @@ export type HttpBody =
   | { readonly kind: "none" }
   | { readonly kind: "json"; readonly value: JsonValue };
 
-export interface HttpMatchV1 {
+/**
+ * 노출 마스킹을 통과한 표시용 HTTP 요청 형태다(ADR-0053 `HttpDisplayV1`). matchKey 계산에
+ * 쓰는 매칭 재료(정확한 pathname 을 담는 `HttpMatchMaterialV1`)는 이 타입과 필드가 같아도
+ * **자식 프로세스 밖으로 나가지 않는다** — Coordinator wire 와 Store 에 실리는 요청에는 그
+ * 재료를 실을 자리 자체가 없다. 매칭 재료 타입은 `runtime.d.mts` 에만 있고, 여기서 export
+ * 하지 않는다.
+ */
+export interface HttpDisplayV1 {
   readonly method: string;
+  /** `https://host/<redacted>?page=2` — 경로만 지우고 scheme·host·query 는 남긴다. */
   readonly url: string;
   readonly headers: Readonly<Record<string, readonly string[]>>;
   readonly body: HttpBody;
@@ -22,10 +39,9 @@ export interface HttpMatchV1 {
 
 export interface NormalizedExternalRequest {
   readonly protocol: "http";
-  readonly schemaVersion: typeof HTTP_ADAPTER_SCHEMA_VERSION;
+  readonly interactionSchemaVersion: typeof HTTP_INTERACTION_SCHEMA_VERSION;
   readonly matchKey: string;
-  readonly match: HttpMatchV1;
-  readonly display: HttpMatchV1;
+  readonly display: HttpDisplayV1;
 }
 
 export interface StoredHttpResponse {

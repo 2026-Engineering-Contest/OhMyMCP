@@ -306,41 +306,50 @@ External 세션은 `node:sqlite` 로 저장한다. Node 가 이 모듈을 아직
 읽힌다. 경고를 지우지 않는 이유와 범위를 좁힌 방법은
 [ADR-0056](../../docs/adr/0056-node-sqlite-실험-경고를-external-사용자에게만-보인다.md).
 
-### External 세션의 URL 경로는 아직 저장된다
+### External 세션은 URL 경로를 저장하지 않는다
 
-마스킹은 **이름**으로 판정한다. URL 경로 세그먼트에는 판정에 쓸 이름이 없어서, 지금 구현은
-External 세션에 URL의 경로를 **원문 그대로 저장한다.**
+마스킹은 **이름**으로 판정한다. URL 경로 세그먼트에는 판정에 쓸 이름이 없어서, 이름 기반
+마스킹으로는 무엇이 비밀인지 가릴 수 없다. 그래서 matchKey 를 계산한 **뒤**, 저장 직전에
+pathname 을 통째로 지운다.
 
 ```
 https://hooks.example.com/services/T000/B111/XXXXsecret?token=abc
-                                              ^^^^^^^^^^ 저장됨   ^^^ 가려짐
+        ↓ 저장되는 값
+https://hooks.example.com/<redacted>?token=[redacted]
 ```
 
-**경로가 남는 자리는 요청 URL 하나가 아니다.** 아래 **표준 URL 필드 넷**이 대표적이다.
+**표준 URL 필드 넷**에 같은 규칙이 적용된다. `location`·`content-location` 은 상대 참조(RFC
+9110, `Location: /hooks/SECRET`)여도 거부하지 않고 응답 URL 기준으로 절대 URL 로 해석한 뒤
+같은 규칙으로 지운다.
 
-| 자리 | 왜 남는가 |
+| 자리 | 적용 |
 |---|---|
-| 요청 URL | 정규화가 scheme·host·query 만 다루고 pathname 은 그대로 둔다 |
-| 응답 `url` | 같은 정규화를 타므로 요청과 같은 경로가 남는다 |
-| `Location` 헤더 | 값이 URL 이라 이름 기반 민감 키 판정에 걸리지 않는다 |
-| `Content-Location` 헤더 | 위와 같다 |
+| 요청 `display.url` | pathname → `<redacted>` |
+| 저장 outcome `url` | 위와 같다 |
+| `location` 헤더 | 절대 URL 로 해석 후 pathname → `<redacted>` |
+| `content-location` 헤더 | 위와 같다 |
+
+matchKey 계산에 쓰는 정확한 pathname(매칭 재료)은 **자식 프로세스 밖으로 나가지 않는다** —
+Coordinator 로 보내지도, Store 에 실리지도 않는다. `/hooks/AAA` 와 `/hooks/BBB` 는 여전히
+다른 matchKey 를 낸다. pathname 이 없어도 매칭 정확도가 변하지 않는 이유다.
 
 **이 넷이 전부는 아니다.** JSON body 안의 URL 문자열(pagination 의 `next`, HATEOAS 링크)과
-`Link`(RFC 8288)·`Refresh` 헤더에도 경로가 그대로 남는다. 값의 이름으로 판정할 수 없는 자리라
+`Link`(RFC 8288)·`Refresh` 헤더에는 경로가 그대로 남는다. 값의 이름으로 판정할 수 없는 자리라
 ADR-0053 도 이들을 보장 범위 밖으로 둔다. **자격증명이 어디에 실려 나가든 아래 정리 절차는
 똑같이 적용된다.**
 
-Slack·Discord webhook처럼 **경로 자체가 자격증명**인 endpoint를 녹화하면 그 값이 세션 파일에
-남는다. 그런 API를 녹화한 세션 파일은 커밋하지 마라.
+Slack·Discord webhook처럼 **경로 자체가 자격증명**인 endpoint를 녹화해도, 그 값은 위 넷에서는
+남지 않는다. 다만 그 endpoint 가 JSON body 나 `Link`/`Refresh` 헤더로 자기 URL 을 되돌려주면
+그 자리로는 여전히 샐 수 있다 — 녹화한 세션 파일을 커밋하기 전에는 내용을 확인해라.
 
-경로를 저장하지 않기로 하는 결정은
-[ADR-0053](../../docs/adr/0053-http-외부-요청-매칭과-반복-호출-정책.md)에 적혀 있고 **구현은
-아직 없다.** 위의 "현재 구현이 저장한다" 서술은 그 구현이 병합될 때 지운다. 아래 정리 절차는
-남긴다 — 구현 전에 만든 세션 파일은 그 뒤에도 계속 존재하기 때문이다.
+**이 절 위에 있던 서술("URL 경로가 원문으로 저장된다")은 ADR-0053 의 구현 PR 이전 버전에
+해당한다.** 그 시점에 만든 세션 파일에는 경로가 원문으로 남아 있으므로, 아래 정리 절차가
+여전히 필요하다.
 
 ### 세션 파일에 자격증명이 들어갔을 때
 
-구현 전에 녹화한 세션에는 경로가 원문으로 들어 있다. **파일을 지우는 것으로 끝나지 않는다.**
+이 문서의 이전 버전(경로 제거 구현 이전)에서 녹화한 세션에는 경로가 원문으로 들어 있다.
+**파일을 지우는 것으로 끝나지 않는다.**
 
 1. 세션 파일을 삭제한다.
 2. 노출된 자격증명을 **폐기하고 재발급한다.** 커밋했다면 파일을 지워도 git 히스토리에

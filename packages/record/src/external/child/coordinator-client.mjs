@@ -1,12 +1,14 @@
 import { request as httpRequest } from "node:http";
 import { MAX_COORDINATOR_PAYLOAD_BYTES } from "../../shared/limits.mjs";
+import { ExternalRecordReplayError } from "../errors.mjs";
 
-const clientError = (code, message) => {
-  const error = new Error(message);
-  error.name = "ExternalRecordReplayError";
-  error.code = code;
-  return error;
-};
+/**
+ * 정본 클래스로 만든다. 한때 여기서 `new Error()` 에 `name`·`code` 만 얹어 모양을 흉내 냈다 —
+ * `errors.mjs` 가 "결함이었다" 고 적은 바로 그 패턴이다. 자식 안에서는 instanceof 로 분기하는
+ * 곳이 없어 동작 차이는 없었지만, 가짜를 만드는 코드가 남아 있으면 다음 사람이 그것을
+ * 복사한다. 오류 형태는 패키지에 한 벌만 둔다.
+ */
+const clientError = (code, message) => new ExternalRecordReplayError(code, message);
 
 export function createCoordinatorClient(options) {
   const endpoint = new URL(options.url);

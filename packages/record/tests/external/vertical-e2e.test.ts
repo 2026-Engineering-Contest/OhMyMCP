@@ -71,13 +71,27 @@ describe("external Record/Replay vertical", () => {
     });
     const replayed = await replayConnection.client.callTool("fetch_weather", { city: "seoul" });
 
-    expect(replayed).toEqual(recorded);
+    // status·header·body 는 기록과 동일하다. `url` 만 다르다 — 저장된 응답의 pathname 은
+    // ADR-0053 이 지운다. 그래서 여기서만 recorded 와 replayed 가 벌어지고, 그 벌어짐이
+    // 정확히 pathname 자리인지를 아래에서 직접 확인한다.
+    const recordedText = (
+      recorded.content as readonly { readonly type: string; readonly text: string }[]
+    )[0]?.text;
     const replayText = (
       replayed.content as readonly { readonly type: string; readonly text: string }[]
     )[0]?.text;
-    expect(JSON.parse(replayText ?? "null")).toEqual({
+    const recordedBody = JSON.parse(recordedText ?? "null");
+    const replayBody = JSON.parse(replayText ?? "null");
+
+    expect(recordedBody).toEqual({
       status: 200,
       url: `${originUrl}?city=seoul&requestId=fixture-value`,
+      header: "yes",
+      body: { city: "seoul", weather: "sunny" },
+    });
+    expect(replayBody).toEqual({
+      status: 200,
+      url: `http://127.0.0.1:${address.port}/<redacted>?city=seoul&requestId=fixture-value`,
       header: "yes",
       body: { city: "seoul", weather: "sunny" },
     });

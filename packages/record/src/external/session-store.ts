@@ -123,7 +123,7 @@ interface MutableSession {
  * 없애려는 것이 정확히 그 차이다.
  *
  * **얼리기**는 저장본을 지킨다. 스냅샷은 최상위만 얼리고 `request`·`outcome` 은 참조를 그대로
- * 넘기므로, 얼려 두지 않으면 `snapshot.request.match.method = "DELETE"` 한 줄로 저장본이
+ * 넘기므로, 얼려 두지 않으면 `snapshot.request.display.method = "DELETE"` 한 줄로 저장본이
  * 바뀐다. 그러면 이미 계산된 matchKey 와 저장된 `match` 가 어긋나고 Replay 가 기록과 다른
  * 것을 돌려준다.
  *
