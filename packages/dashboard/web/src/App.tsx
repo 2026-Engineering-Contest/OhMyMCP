@@ -5,6 +5,7 @@ import { Sidebar } from "./components/Sidebar.js";
 import { ThemeToggle } from "./components/ThemeToggle.js";
 import { GenerateWizard } from "./screens/GenerateWizard.js";
 import { Home } from "./screens/Home.js";
+import { RecordBrowser } from "./screens/RecordBrowser.js";
 import { RepairReview } from "./screens/RepairReview.js";
 import { RunView } from "./screens/RunView.js";
 
@@ -23,6 +24,7 @@ type Route =
   | { readonly screen: "home" }
   | { readonly screen: "runs"; readonly runId: string | null }
   | { readonly screen: "generate" }
+  | { readonly screen: "record"; readonly path: string | null }
   | { readonly screen: "repair"; readonly runId: string | null }
   | { readonly screen: "redirect" };
 
@@ -54,6 +56,10 @@ function parseRoute(hash: string): Route {
   if (first === "generate") {
     return { screen: "generate" };
   }
+  if (first === "record") {
+    // 세션 경로는 `/` 를 품으므로 인코딩된 한 세그먼트다. 옛 `#/cassettes/<path>` 와 같은 규약.
+    return { screen: "record", path: rest[0] !== undefined ? decodeRouteValue(rest[0]) : null };
+  }
   if (first === "repair") {
     return {
       screen: "repair",
@@ -68,6 +74,7 @@ const HEADER_TITLES: Record<NavId, string> = {
   home: "Home",
   runs: "Runs",
   generate: "Generate",
+  record: "Record",
   repair: "Repair",
 };
 
@@ -125,6 +132,8 @@ function Screen({
       return <RunView runId={route.runId} />;
     case "generate":
       return <GenerateWizard />;
+    case "record":
+      return <RecordBrowser path={route.path} />;
     case "repair":
       return <RepairReview runId={route.runId} />;
   }

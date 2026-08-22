@@ -7,7 +7,14 @@ import type {
   StartRunRequest,
   StartRunResponse,
 } from "../api-types.js";
-import { listSuites, readFileContent, writeFileContent } from "./files.js";
+import {
+  deleteSessionFile,
+  listSessions,
+  listSuites,
+  readFileContent,
+  readSessionDetail,
+  writeFileContent,
+} from "./files.js";
 import { resolveProjectPath } from "./paths.js";
 import type { RunIo, RunRegistry } from "./run-registry.js";
 import { formatSseEvent, formatSseEvents, SSE_HEADERS } from "./sse.js";
@@ -55,6 +62,18 @@ export async function handleRequest(
   }
   if (method === "PUT" && pathname.startsWith("/api/suites/")) {
     await handlePutFile(request, response, options.root, decodeParam(pathname, "/api/suites/"));
+    return;
+  }
+  if (method === "GET" && pathname === "/api/sessions") {
+    sendJson(response, 200, await listSessions(options.root));
+    return;
+  }
+  if (method === "GET" && pathname.startsWith("/api/sessions/")) {
+    handleGetSession(response, options.root, decodeParam(pathname, "/api/sessions/"));
+    return;
+  }
+  if (method === "DELETE" && pathname.startsWith("/api/sessions/")) {
+    await handleDeleteSession(response, options.root, decodeParam(pathname, "/api/sessions/"));
     return;
   }
   if (method === "POST" && pathname === "/api/runs") {
@@ -126,6 +145,74 @@ async function handleGetFile(
   } catch {
     sendJson(response, 404, { error: "파일을 찾을 수 없습니다." });
   }
+}
+
+/**
+ * 세션 상세. 세션 파일이 아니거나 없으면 404 다 — 판별은 `record` 의 `loadSession` 이 한다.
+ * 동기 함수인 것은 `node:sqlite` 가 동기 API 라서다.
+ */
+function handleGetSession(
+  response: ServerResponse,
+  root: string,
+  relativeOrNull: string | null,
+): void {
+  const absolute = resolveGuardedPath(response, root, relativeOrNull);
+  if (absolute === null) return;
+  const detail = readSessionDetail(root, absolute);
+  if (detail === null) {
+    sendJson(response, 404, { error: "세션 파일을 찾을 수 없습니다." });
+    return;
+  }
+  sendJson(response, 200, detail);
+}
+
+async function handleDeleteSession(
+  response: ServerResponse,
+  root: string,
+  relativeOrNull: string | null,
+): Promise<void> {
+  const absolute = resolveGuardedPath(response, root, relativeOrNull);
+  if (absolute === null) return;
+  // 지우기 전에 세션인지 확인한다. 경로만 맞으면 무엇이든 지워 주면, 이 API 가 프로젝트
+  // 안의 아무 파일이나 지우는 수단이 된다.
+  if (readSessionDetail(root, absolute) === null) {
+    sendJson(response, 404, { error: "세션 파일을 찾을 수 없습니다." });
+    return;
+  }
+  try {
+    await deleteSessionFile(absolute);
+    response.writeHead(204);
+    response.end();
+  } catch (error) {
+    if (isErrno(error, "EACCES")) {
+      sendJson(response, 400, {
+        error: "삭제 권한이 없습니다. 파일 또는 상위 디렉터리의 권한을 확인하세요.",
+      });
+      return;
+    }
+    throw error;
+  }
+}
+
+/**
+ * 경로를 해석하고 루트 밖 접근을 막는다. 막힌 경우 응답을 직접 보내고 `null` 을 준다.
+ * 세션 경로 핸들러 셋이 같은 두 검사를 반복하던 것을 한자리로 모은 것이다.
+ */
+function resolveGuardedPath(
+  response: ServerResponse,
+  root: string,
+  relativeOrNull: string | null,
+): string | null {
+  if (relativeOrNull === null) {
+    sendJson(response, 400, { error: "경로를 해석할 수 없습니다." });
+    return null;
+  }
+  const absolute = resolveProjectPath(root, relativeOrNull);
+  if (absolute === null) {
+    sendJson(response, 400, { error: "허용되지 않는 경로입니다." });
+    return null;
+  }
+  return absolute;
 }
 
 async function handlePutFile(

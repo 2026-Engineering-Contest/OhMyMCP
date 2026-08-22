@@ -5,7 +5,7 @@ import type { JSX } from "react";
  * 인라인 SVG stroke 아이콘) + 하단 서버 주소(`location.host`, mono).
  * 활성 항목은 `aria-current="page"` 하나로 표시하고 스타일도 그 속성을 본다.
  */
-export type NavId = "home" | "runs" | "generate" | "repair";
+export type NavId = "home" | "runs" | "generate" | "record" | "repair";
 
 interface NavItem {
   readonly id: NavId;
@@ -60,6 +60,18 @@ const NAV_ITEMS: readonly NavItem[] = [
       <svg {...ICON_PROPS}>
         <path d="M12 3v18" />
         <path d="M3 12h18" />
+      </svg>
+    ),
+  },
+  {
+    id: "record",
+    label: "Record",
+    hash: "#/record",
+    icon: (
+      // biome-ignore lint/a11y/noSvgWithoutTitle: 장식용 아이콘, 라벨 텍스트가 인접
+      <svg {...ICON_PROPS}>
+        <circle cx="12" cy="12" r="9" />
+        <circle cx="12" cy="12" r="3.5" />
       </svg>
     ),
   },

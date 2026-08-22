@@ -11,6 +11,15 @@ import { FlowChip } from "../components/FlowChip.js";
 import { StatusBadge } from "../components/StatusBadge.js";
 import type { CommandMethod } from "../generate/steps/StepServer.js";
 import { StepServer, splitCommand } from "../generate/steps/StepServer.js";
+import type { SessionMode } from "../run/build-test-argv.js";
+import { buildTestArgv } from "../run/build-test-argv.js";
+
+/** 라디오 표시 문구. 순서가 곧 화면 순서다. */
+const SESSION_CHOICES: readonly (readonly [SessionMode, string])[] = [
+  ["none", "안 씀"],
+  ["record", "녹화"],
+  ["replay", "재생"],
+];
 
 /**
  * Home(UI 설계 §5-1). 2열 카드: 좌측 테스트 스위트(GET /api/suites), 우측 최근 실행
@@ -31,6 +40,8 @@ export function Home(): JSX.Element {
   const [method, setMethod] = useState<CommandMethod>("node");
   const [target, setTarget] = useState("");
   const [args, setArgs] = useState<readonly string[]>([]);
+  const [sessionMode, setSessionMode] = useState<SessionMode>("none");
+  const [sessionPath, setSessionPath] = useState("");
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
@@ -48,6 +59,8 @@ export function Home(): JSX.Element {
     setMethod("node");
     setTarget("");
     setArgs([]);
+    setSessionMode("none");
+    setSessionPath("");
     setStartError(null);
   }
 
@@ -56,17 +69,26 @@ export function Home(): JSX.Element {
     if (command === "") {
       return;
     }
+    // 폼 검증은 argv 조립과 같은 함수가 한다. 화면이 따로 판정하면 CLI 규칙과 갈라진다.
+    let argv: readonly string[];
+    try {
+      argv = buildTestArgv({
+        suitePath,
+        command,
+        args: [...leadingArgs, ...args],
+        sessionMode,
+        sessionPath: sessionPath.trim(),
+      });
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : String(err));
+      return;
+    }
     setStarting(true);
     setStartError(null);
     try {
       const response = await apiSend<StartRunResponse>("POST", "/api/runs", {
         flow: "test",
-        argv: [
-          suitePath,
-          "--command",
-          command,
-          ...[...leadingArgs, ...args].flatMap((arg) => ["--arg", arg]),
-        ],
+        argv: [...argv],
       } satisfies StartRunRequest);
       window.location.hash = `#/runs/${encodeURIComponent(response.runId)}`;
     } catch (err) {
@@ -109,7 +131,7 @@ export function Home(): JSX.Element {
                   <span className="font-mono text-xs text-ink">{suite.path}</span>
                   <button
                     type="button"
-                    className="rounded bg-accent px-3 py-1 text-xs font-medium text-white"
+                    className="shrink-0 rounded bg-accent px-3 py-1 text-xs font-medium text-white"
                     onClick={() => openPrompt(suite.path)}
                   >
                     실행
@@ -133,6 +155,42 @@ export function Home(): JSX.Element {
                       onTargetChange={setTarget}
                       onArgsChange={setArgs}
                     />
+                    <fieldset className="space-y-2">
+                      <legend className="text-xs font-medium text-ink">External 세션</legend>
+                      <p className="text-xs text-ink-muted">
+                        서버 밖으로 나가는 호출(HTTP 등)을 녹화하거나, 녹화본으로 재생합니다.
+                      </p>
+                      <div className="flex gap-4">
+                        {SESSION_CHOICES.map(([value, label]) => (
+                          <label
+                            key={value}
+                            className="flex items-center gap-1.5 text-xs text-ink"
+                          >
+                            <input
+                              type="radio"
+                              name="home-run-session"
+                              value={value}
+                              checked={sessionMode === value}
+                              onChange={() => setSessionMode(value)}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                      {sessionMode !== "none" && (
+                        <input
+                          type="text"
+                          className="w-full rounded border border-line bg-surface px-2 py-1 font-mono text-xs text-ink"
+                          placeholder={
+                            sessionMode === "record"
+                              ? "녹화본을 저장할 경로 (예: .mcpeak/session.db)"
+                              : "재생할 녹화본 경로 (예: .mcpeak/session.db)"
+                          }
+                          value={sessionPath}
+                          onChange={(event) => setSessionPath(event.target.value)}
+                        />
+                      )}
+                    </fieldset>
                     <div className="flex gap-2">
                       <button
                         type="submit"
